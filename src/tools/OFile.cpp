@@ -261,7 +261,7 @@ void OFile::backupAllFiles( const std::string& str ) {
 
 void OFile::backupFile( const std::string& bstring, const std::string& fname ) {
   if(fname=="/dev/null") return;
-  int maxbackup=100;
+  int maxbackup=1000;
   if(std::getenv("PLUMED_MAXBACKUP")) Tools::convert(std::getenv("PLUMED_MAXBACKUP"),maxbackup);
   if(maxbackup>0 && (!comm || comm->Get_rank()==0)) {
     FILE* ff=std::fopen(const_cast<char*>(fname.c_str()),"r");
