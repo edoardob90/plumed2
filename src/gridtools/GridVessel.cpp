@@ -450,7 +450,6 @@ double GridVessel::getValueAndDerivatives( const std::vector<double>& x, const u
 // loop over neighbors
   for(unsigned int ipoint=0; ipoint<neigh.size(); ++ipoint) {
     double grid=getGridElement(neigh[ipoint], ind*(1+dimension) );
-    printf("GRID %d OF %d IS %f \n",ipoint,neigh.size(),grid-0.5 );
     for(unsigned j=0; j<dimension; ++j) dder[j] = getGridElement( neigh[ipoint], ind*(1+dimension) + 1 + j );
 
     getIndices( neigh[ipoint], nindices );

@@ -177,7 +177,7 @@ void FindContourSurface::prepareForAveraging() {
     lockContributors();
     // Set the direction in which to look for the contour
     direction.resize( ingrid->getDimension(), 0 );
-    direction[dir_n] = 0.999999999*ingrid->getGridSpacing()[dir_n];
+    direction[dir_n] = 1.1*ingrid->getGridSpacing()[dir_n];
   }
 }
 
@@ -245,7 +245,9 @@ void FindContourSurface::compute( const unsigned& current, MultiValue& myvals ) 
     // Check if the minimum is bracketed
     if( val1*val2<0 ) {
         ingrid->getGridPointCoordinates( shiftn, point );
-        printf("FOUND BRACKETED POINT %f %f %f %f %f \n",point[0],point[1],point[2],val1,val2);
+#ifndef DNDEBUG
+        printf("FOUND BRACKETED POINT %f %f %f %f \n",point[0],point[1],val1,val2);
+#endif
         findContour( direction, point );
       minp=point[dir_n]; nfound++; break;
     }
