@@ -104,8 +104,6 @@ FourierTransform::FourierTransform(const ActionOptions&ao):
 #ifndef __PLUMED_HAS_FFTW
   error("this feature is only available if you compile PLUMED with FFTW");
 #else
-  // Print what FFTW output will be based on the input data
-  log.printf("  FFTW setup : \n Rank: %i, Dimensions: %i x %i\n", ingrid->getDimension(), ingrid->getNbin()[0], ingrid->getNbin()[1]);
   // Get the type of FT
   parse("FT_TYPE",output_type);
   if (output_type.length()==0) {
@@ -173,6 +171,7 @@ FourierTransform::FourierTransform(const ActionOptions&ao):
 
 #ifdef __PLUMED_HAS_FFTW
 void FourierTransform::performOperations( const bool& from_update ) {
+  
 
   // Spacing of the real grid
   std::vector<double> g_spacing ( ingrid->getGridSpacing() );
@@ -182,7 +181,9 @@ void FourierTransform::performOperations( const bool& from_update ) {
   std::vector<std::string> ft_min( ingrid->getMin() ), ft_max( ingrid->getMax() );
   // Number of bins in the k-grid (equal to the number of bins in the real grid)
   std::vector<unsigned> ft_bins ( ingrid->getNbin() );
-
+  
+  log.printf("  === FFTW setup === \n");
+  log.printf("   Rank : %d \n   Dimensions :\n", ingrid->getDimension());
   for (unsigned i=0; i<ingrid->getDimension(); ++i) {
     // Check PBC in current grid dimension
     if( !ingrid->isPeriodic(i) ) ft_bins[i]++;
@@ -193,26 +194,18 @@ void FourierTransform::performOperations( const bool& from_update ) {
     dmin=0.0;
     dmax=2.0*pi*ft_bins[i]/( ingrid->getGridExtent(i) );
     Tools::convert(dmin,ft_min[i]); Tools::convert(dmax,ft_max[i]);
+    // Info on FFT grid
+    i==0 ? log.printf("   %d\n", ingrid->getNbin()[i]) : log.printf("    x %d \n", ingrid->getNbin()[i]);
   }
 
   // This is the actual setup of the k-grid
   mygrid->setBounds( ft_min, ft_max, ft_bins, ft_spacing); resizeFunctions();
-
-  // *** CHECK CORRECT k-GRID BOUNDARIES ***
-  //log<<"Real grid boundaries: \n"
-  //    <<"  min_x: "<<mygrid->getMin()[0]<<"  min_y: "<<mygrid->getMin()[1]<<"\n"
-  //    <<"  max_x: "<<mygrid->getMax()[0]<<"  max_y: "<<mygrid->getMax()[1]<<"\n"
-  //    <<"K-grid boundaries:"<<"\n"
-  //    <<"  min_x: "<<ft_min[0]<<"  min_y: "<<ft_min[1]<<"\n"
-  //    <<"  max_x: "<<ft_max[0]<<"  max_y: "<<ft_max[1]<<"\n";
-
+  
   // Get the size of the input data arrays (to allocate FFT data)
   std::vector<unsigned> input_grid_bins( ingrid->getNbin() );
   size_t fft_dimension=1; for(unsigned i=0; i<input_grid_bins.size(); ++i) fft_dimension*=static_cast<size_t>( input_grid_bins[i] );
-
   // FFT arrays
   std::vector<std::complex<double> > input_data(fft_dimension), fft_data(fft_dimension);
-
 
   // Fill real input with the data on the grid
   std::vector<unsigned> ind( ingrid->getDimension() );
@@ -220,24 +213,24 @@ void FourierTransform::performOperations( const bool& from_update ) {
     // Get point indices
     ingrid->getIndices(i, ind);
     // Fill input data in row-major order
-    input_data[ind[0]*input_grid_bins[0]+ind[1]].real( getFunctionValue( i ) );
-    input_data[ind[0]*input_grid_bins[0]+ind[1]].imag( 0.0 );
+    plumed_dbg_assert( ind.size()==2 && ind[0]*input_grid_bins[0]+ind[1]<input_data.size() );
+    input_data[i].real( getFunctionValue(i) ); input_data[i].imag(0);
+    // !!! 2D version; won't work in 1D
+    // input_data[ind[0]*input_grid_bins[0]+ind[1]].real( getFunctionValue( i ) );
+    // input_data[ind[0]*input_grid_bins[0]+ind[1]].imag( 0.0 );
   }
 
   //fftw_plan plan_complex = fftw_plan_dft_2d(N_input_data[0], N_input_data[1], reinterpret_cast<fftw_complex*>(&input_data[0]), reinterpret_cast<fftw_complex*>(&fft_data[0]), fourier_params[1], FFTW_ESTIMATE);
 
   // General FFTW plan (arbitrary dimensions)
   fftw_plan plan_complex = fftw_plan_dft( ingrid->getDimension(), reinterpret_cast<const int*>(&input_grid_bins), reinterpret_cast<fftw_complex*>(&input_data), reinterpret_cast<fftw_complex*>(&fft_data), fourier_params[1], FFTW_ESTIMATE );
-
   // Compute FT
   fftw_execute( plan_complex );
-
   // Compute the normalization constant
   double norm=1.0;
   for (unsigned i=0; i<input_grid_bins.size(); ++i) {
     norm *= pow( input_grid_bins[i], (1-fourier_params[0])/2 );
   }
-
   // Save FT data to output grid
   std::vector<unsigned> output_grid_bins( mygrid->getNbin() );
   std::vector<unsigned> out_ind ( mygrid->getDimension() );
