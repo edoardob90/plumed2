@@ -104,8 +104,8 @@ FourierTransform::FourierTransform(const ActionOptions&ao):
 #ifndef __PLUMED_HAS_FFTW
   error("this feature is only available if you compile PLUMED with FFTW");
 #else
-  if( ingrid->getDimension()!=2 ) error("fourier transform currently only works with two dimensional grids");
-
+  // Print what FFTW output will be based on the input data
+  log.printf("  FFTW setup : \n Rank: %i, Dimensions: %i x %i\n", ingrid->getDimension(), ingrid->getNbin()[0], ingrid->getNbin()[1]);
   // Get the type of FT
   parse("FT_TYPE",output_type);
   if (output_type.length()==0) {
@@ -206,11 +206,9 @@ void FourierTransform::performOperations( const bool& from_update ) {
   //    <<"  min_x: "<<ft_min[0]<<"  min_y: "<<ft_min[1]<<"\n"
   //    <<"  max_x: "<<ft_max[0]<<"  max_y: "<<ft_max[1]<<"\n";
 
-
-
   // Get the size of the input data arrays (to allocate FFT data)
-  std::vector<unsigned> N_input_data( ingrid->getNbin() );
-  size_t fft_dimension=1; for(unsigned i=0; i<N_input_data.size(); ++i) fft_dimension*=static_cast<size_t>( N_input_data[i] );
+  std::vector<unsigned> input_grid_bins( ingrid->getNbin() );
+  size_t fft_dimension=1; for(unsigned i=0; i<input_grid_bins.size(); ++i) fft_dimension*=static_cast<size_t>( input_grid_bins[i] );
 
   // FFT arrays
   std::vector<std::complex<double> > input_data(fft_dimension), fft_data(fft_dimension);
@@ -222,39 +220,41 @@ void FourierTransform::performOperations( const bool& from_update ) {
     // Get point indices
     ingrid->getIndices(i, ind);
     // Fill input data in row-major order
-    input_data[ind[0]*N_input_data[0]+ind[1]].real( getFunctionValue( i ) );
-    input_data[ind[0]*N_input_data[0]+ind[1]].imag( 0.0 );
+    input_data[ind[0]*input_grid_bins[0]+ind[1]].real( getFunctionValue( i ) );
+    input_data[ind[0]*input_grid_bins[0]+ind[1]].imag( 0.0 );
   }
 
-  // *** HERE is the only clear limitation: I'm computing explicitly a 2D FT. It should not happen to deal with other than two-dimensional grid ...
-  fftw_plan plan_complex = fftw_plan_dft_2d(N_input_data[0], N_input_data[1], reinterpret_cast<fftw_complex*>(&input_data[0]), reinterpret_cast<fftw_complex*>(&fft_data[0]), fourier_params[1], FFTW_ESTIMATE);
+  //fftw_plan plan_complex = fftw_plan_dft_2d(N_input_data[0], N_input_data[1], reinterpret_cast<fftw_complex*>(&input_data[0]), reinterpret_cast<fftw_complex*>(&fft_data[0]), fourier_params[1], FFTW_ESTIMATE);
+
+  // General FFTW plan (arbitrary dimensions)
+  fftw_plan plan_complex = fftw_plan_dft( ingrid->getDimension(), reinterpret_cast<const int*>(&input_grid_bins), reinterpret_cast<fftw_complex*>(&input_data), reinterpret_cast<fftw_complex*>(&fft_data), fourier_params[1], FFTW_ESTIMATE );
 
   // Compute FT
   fftw_execute( plan_complex );
 
   // Compute the normalization constant
   double norm=1.0;
-  for (unsigned i=0; i<N_input_data.size(); ++i) {
-    norm *= pow( N_input_data[i], (1-fourier_params[0])/2 );
+  for (unsigned i=0; i<input_grid_bins.size(); ++i) {
+    norm *= pow( input_grid_bins[i], (1-fourier_params[0])/2 );
   }
 
   // Save FT data to output grid
-  std::vector<unsigned> N_out_data ( mygrid->getNbin() );
+  std::vector<unsigned> output_grid_bins( mygrid->getNbin() );
   std::vector<unsigned> out_ind ( mygrid->getDimension() );
   for(unsigned i=0; i<mygrid->getNumberOfPoints(); ++i) {
     mygrid->getIndices( i, out_ind );
     if (real_output) {
       double ft_value;
       // Compute abs/norm and fix normalization
-      if (!store_norm) ft_value=std::abs( fft_data[out_ind[0]*N_out_data[0]+out_ind[1]] / norm );
-      else ft_value=std::norm( fft_data[out_ind[0]*N_out_data[0]+out_ind[1]] / norm );
-      // Set the value
+      if (!store_norm) ft_value=std::abs( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
+      else ft_value=std::norm( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
+      // Save value on the output grid
       mygrid->setGridElement( i, 0, ft_value );
     } else {
       double ft_value_real, ft_value_imag;
-      ft_value_real=fft_data[out_ind[0]*N_out_data[0]+out_ind[1]].real() / norm;
-      ft_value_imag=fft_data[out_ind[0]*N_out_data[0]+out_ind[1]].imag() / norm;
-      // Set values
+      ft_value_real=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].real() / norm;
+      ft_value_imag=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].imag() / norm;
+      // Save values on the output grid
       mygrid->setGridElement( i, 0, ft_value_real);
       mygrid->setGridElement( i, 1, ft_value_imag);
     }
