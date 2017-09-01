@@ -225,28 +225,25 @@ void FourierTransform::performOperations( const bool& from_update ) {
     // Get point indices
     ingrid->getIndices(i, ind);
     // Fill input data in row-major order
-    plumed_dbg_assert( ind.size()==2 && ind[0]*input_grid_bins[0]+ind[1]<input_data.size() );
+    /* Here is the *BIG* problem:
+     * 2D version won't work in 1D.
+     * We need to find a general way to fill the FFTW input from the data on the input grid
+     * which can be of arbitrary dimension.
+     * The following line is a TEMPORARY solution to work with 1D input grid.
+     * If 2D is needed, for the time being we must switch to 'master' branch.
+     */
     input_data[i][0] = getFunctionValue(i); input_data[i][1] = 0.0;
+    //plumed_dbg_assert( ind.size()==2 && ind[0]*input_grid_bins[0]+ind[1]<input_data.size() );
     //input_data[i].real( getFunctionValue(i) ); input_data[i].imag(0);
-    // !!! 2D version; won't work in 1D
     // input_data[ind[0]*input_grid_bins[0]+ind[1]].real( getFunctionValue( i ) );
     // input_data[ind[0]*input_grid_bins[0]+ind[1]].imag( 0.0 );
   }
 
-  //fftw_plan plan_complex = fftw_plan_dft_2d(N_input_data[0], N_input_data[1], reinterpret_cast<fftw_complex*>(&input_data[0]), reinterpret_cast<fftw_complex*>(&fft_data[0]), fourier_params[1], FFTW_ESTIMATE);
-
   // General FFTW plan (arbitrary dimensions)
   fftw_plan plan_complex = fftw_plan_dft( ingrid->getDimension(), input_grid_bins, input_data, fft_data, fourier_params[1], FFTW_ESTIMATE );
-  
+
   // Compute FT
   fftw_execute( plan_complex );
-  
-  // Compute the normalization constant
-  //double norm=1.0;
-  //for (unsigned i=0; i<input_grid_bins.size(); ++i) {
-  //  norm *= pow( input_grid_bins[i], (1-fourier_params[0])/2 );
-  //}
-
 
   // Save FT data to output grid
   std::vector<unsigned> output_grid_bins( mygrid->getNbin() );
