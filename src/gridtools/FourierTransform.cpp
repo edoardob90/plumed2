@@ -202,10 +202,22 @@ void FourierTransform::performOperations( const bool& from_update ) {
   mygrid->setBounds( ft_min, ft_max, ft_bins, ft_spacing); resizeFunctions();
   
   // Get the size of the input data arrays (to allocate FFT data)
-  std::vector<unsigned> input_grid_bins( ingrid->getNbin() );
-  size_t fft_dimension=1; for(unsigned i=0; i<input_grid_bins.size(); ++i) fft_dimension*=static_cast<size_t>( input_grid_bins[i] );
+  //std::vector<unsigned> input_grid_bins( ingrid->getNbin() );
+  //size_t fft_dimension=1; for(unsigned i=0; i<input_grid_bins.size(); ++i) fft_dimension*=static_cast<size_t>( input_grid_bins[i] );
+  int *input_grid_bins = (int*)malloc( ingrid->getDimension()*sizeof(int) );
+  size_t fft_dimension=1; double norm=1.0;
+  for (unsigned i=0; i<ingrid->getDimension(); ++i){
+      input_grid_bins[i]=ingrid->getNbin()[i];
+      fft_dimension*=input_grid_bins[i];
+      // Compute the normalization constant
+      norm*=pow( input_grid_bins[i], (1-fourier_params[0])/2 );
+  }
+  
   // FFT arrays
-  std::vector<std::complex<double> > input_data(fft_dimension), fft_data(fft_dimension);
+  //std::vector<std::complex<double> > input_data(fft_dimension), fft_data(fft_dimension);
+  // Do the allocation according to FFTW manual
+  fftw_complex *input_data, *fft_data;
+  input_data = fftw_alloc_complex(fft_dimension); fft_data = fftw_alloc_complex(fft_dimension);
 
   // Fill real input with the data on the grid
   std::vector<unsigned> ind( ingrid->getDimension() );
@@ -214,7 +226,8 @@ void FourierTransform::performOperations( const bool& from_update ) {
     ingrid->getIndices(i, ind);
     // Fill input data in row-major order
     plumed_dbg_assert( ind.size()==2 && ind[0]*input_grid_bins[0]+ind[1]<input_data.size() );
-    input_data[i].real( getFunctionValue(i) ); input_data[i].imag(0);
+    input_data[i][0] = getFunctionValue(i); input_data[i][1] = 0.0;
+    //input_data[i].real( getFunctionValue(i) ); input_data[i].imag(0);
     // !!! 2D version; won't work in 1D
     // input_data[ind[0]*input_grid_bins[0]+ind[1]].real( getFunctionValue( i ) );
     // input_data[ind[0]*input_grid_bins[0]+ind[1]].imag( 0.0 );
@@ -223,14 +236,18 @@ void FourierTransform::performOperations( const bool& from_update ) {
   //fftw_plan plan_complex = fftw_plan_dft_2d(N_input_data[0], N_input_data[1], reinterpret_cast<fftw_complex*>(&input_data[0]), reinterpret_cast<fftw_complex*>(&fft_data[0]), fourier_params[1], FFTW_ESTIMATE);
 
   // General FFTW plan (arbitrary dimensions)
-  fftw_plan plan_complex = fftw_plan_dft( ingrid->getDimension(), reinterpret_cast<const int*>(&input_grid_bins), reinterpret_cast<fftw_complex*>(&input_data), reinterpret_cast<fftw_complex*>(&fft_data), fourier_params[1], FFTW_ESTIMATE );
+  fftw_plan plan_complex = fftw_plan_dft( ingrid->getDimension(), input_grid_bins, input_data, fft_data, fourier_params[1], FFTW_ESTIMATE );
+  
   // Compute FT
   fftw_execute( plan_complex );
+  
   // Compute the normalization constant
-  double norm=1.0;
-  for (unsigned i=0; i<input_grid_bins.size(); ++i) {
-    norm *= pow( input_grid_bins[i], (1-fourier_params[0])/2 );
-  }
+  //double norm=1.0;
+  //for (unsigned i=0; i<input_grid_bins.size(); ++i) {
+  //  norm *= pow( input_grid_bins[i], (1-fourier_params[0])/2 );
+  //}
+
+
   // Save FT data to output grid
   std::vector<unsigned> output_grid_bins( mygrid->getNbin() );
   std::vector<unsigned> out_ind ( mygrid->getDimension() );
@@ -239,14 +256,14 @@ void FourierTransform::performOperations( const bool& from_update ) {
     if (real_output) {
       double ft_value;
       // Compute abs/norm and fix normalization
-      if (!store_norm) ft_value=std::abs( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
-      else ft_value=std::norm( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
+      if (!store_norm) ft_value=std::abs( ( pow(fft_data[i][0],2)*pow(fft_data[i][1],2) )/norm ); //ft_value=std::abs( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
+      else ft_value=sqrt( ( pow(fft_data[i][0],2)*pow(fft_data[i][1],2) )/norm ); //ft_value=std::norm( fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]] / norm );
       // Save value on the output grid
       mygrid->setGridElement( i, 0, ft_value );
     } else {
       double ft_value_real, ft_value_imag;
-      ft_value_real=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].real() / norm;
-      ft_value_imag=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].imag() / norm;
+      ft_value_real=fft_data[i][0] / norm; //ft_value_real=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].real() / norm;
+      ft_value_imag=fft_data[i][1] / norm; //ft_value_imag=fft_data[out_ind[0]*output_grid_bins[0]+out_ind[1]].imag() / norm;
       // Save values on the output grid
       mygrid->setGridElement( i, 0, ft_value_real);
       mygrid->setGridElement( i, 1, ft_value_imag);
@@ -255,6 +272,7 @@ void FourierTransform::performOperations( const bool& from_update ) {
 
   // Free FFTW stuff
   fftw_destroy_plan(plan_complex);
+  fftw_cleanup();
 
 }
 #endif
