@@ -55,7 +55,10 @@ void ContourFindingBase::findContour( const std::vector<double>& direction, std:
 
 inline
 double ContourFindingBase::getDifferenceFromContour( const std::vector<double>& x, std::vector<double>& der ) const {
-  return getFunctionValueAndDerivatives( x, der ) - contour;
+#ifndef DNDEBUG
+    printf("CALCULATING FUNCTION VALUE AT %f %f \n",x[0],x[1]);
+#endif
+    return getFunctionValueAndDerivatives( x, der ) - contour;
 }
 
 }
