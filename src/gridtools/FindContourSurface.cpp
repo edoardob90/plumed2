@@ -245,7 +245,7 @@ void FindContourSurface::compute( const unsigned& current, MultiValue& myvals ) 
     // Check if the minimum is bracketed
     if( val1*val2<0 ) {
         ingrid->getGridPointCoordinates( shiftn, point );
-#ifndef DNDEBUG
+#ifndef NDEBUG
         printf("FOUND BRACKETED POINT %f %f %f %f \n",point[0],point[1],val1,val2);
 #endif
         findContour( direction, point );

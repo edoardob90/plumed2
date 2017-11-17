@@ -72,6 +72,9 @@ class DumpMultiColvar:
   double lenunit;
   MultiColvarBase* mycolv;
   std::string fmt_xyz;
+  std::vector<std::string> names;
+  std::vector<unsigned>    residueNumbers;
+  std::vector<std::string> residueNames;
 public:
   explicit DumpMultiColvar(const ActionOptions&);
   ~DumpMultiColvar();
@@ -143,6 +146,14 @@ DumpMultiColvar::DumpMultiColvar(const ActionOptions&ao):
   of.open(file);
   log.printf("  printing atom positions in %s units \n", unitname.c_str() );
   requestAtoms(atom); addDependency( mycolv );
+
+  // Check if molinfo data are supplied to have proper atom names
+  std::vector<SetupMolInfo*> moldat=plumed.getActionSet().select<SetupMolInfo*>();
+  if (moldat.size()==1) {
+      log.printf("  MOLINFO data found. Using proper atom names\n");
+      names.resize(atom.size());
+      for (unsigned i=0; i<atom.size(); ++i) names[i]=moldat[0]->getAtomName( mycolv->getAbsoluteIndexOfCentralAtom(i) );
+  } else log.printf("  No MOLINFO data found\n");
 }
 
 void DumpMultiColvar::update() {
@@ -163,6 +174,7 @@ void DumpMultiColvar::update() {
   for(unsigned i=0; i<mycolv->getCurrentNumberOfActiveTasks(); ++i) {
     const char* defname="X";
     const char* name=defname;
+    if (names.size()>0) if (names[i].length()>0) name=names[i].c_str();
 
     Vector apos = mycolv->getCentralAtomPos( mycolv->getPositionInFullTaskList(i) );
     if( getNumberOfAtoms()>0 ) apos=pbcDistance( getPosition(0), apos );

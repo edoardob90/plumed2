@@ -74,7 +74,7 @@ Brent1DRootSearch<FCLASS>::Brent1DRootSearch( const FCLASS& pf, const double& t 
 
 template <class FCLASS>
 void Brent1DRootSearch<FCLASS>::bracket( const double& a, const double& b, eng_pointer eng ) {
-#ifndef DNDEBUG
+#ifndef NDEBUG
   plumed_assert( a!=b ); ax=a; bx=b; fa=(myclass_func.*eng)(a); fb=(myclass_func.*eng)(b);
   printf("IN BRACKET %f %f \n",fa,fb);
   if ((fa > 0.0 && fb > 0.0) || (fa < 0.0 && fb < 0.0)) plumed_merror("input points do not bracket root");
