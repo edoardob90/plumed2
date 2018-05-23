@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2016,2017 The plumed team
+   Copyright (c) 2016-2018 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -200,7 +200,7 @@ int PathTools::main(FILE* in, FILE*out,Communicator& pc) {
     // Delete the vals as we don't need them
     for(unsigned i=0; i<vals.size(); ++i) delete vals[i];
     // Return as we are done
-    ofile.close(); return 0;
+    return 0;
   }
 
 // Read initial frame
@@ -286,7 +286,7 @@ int PathTools::main(FILE* in, FILE*out,Communicator& pc) {
   for(unsigned i=0; i<final_path.size(); ++i) { final_path[i]->print( ofile, ofmt, 10. ); delete final_path[i]; }
 // Delete the args as we don't need them anymore
   for(unsigned i=0; i<args.size(); ++i) delete args[i];
-  ofile.close(); return 0;
+  return 0;
 }
 
 } // End of namespace
