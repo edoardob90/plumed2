@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012-2018 The plumed team
+   Copyright (c) 2012-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -56,8 +56,7 @@ The header in the file bias.dat should read:
 \endverbatim
 
 This should then be followed by the value of the potential and its derivative
-at 100 equally spaced points along the distance between 0 and 1. If you run
-with NOSPLINE you do not need to provide derivative information.
+at 100 equally spaced points along the distance between 0 and 1.
 
 You can also include grids that are a function of more than one collective
 variable.  For instance the following would be the input for an external
@@ -86,8 +85,8 @@ value of t1 (the value in the first column) is kept fixed and the value of
 the function is given at 100 equally spaced values for t2 between \f$-pi\f$ and \f$+pi\f$.  In the
 second block of data t1 is fixed at \f$-pi + \frac{2pi}{100}\f$ and the value of the function is
 given at 100 equally spaced values for t2 between \f$-pi\f$ and \f$+pi\f$. In the third block of
-data the same is done but t1 is fixed at \f$-pi + \frac{4pi}{100}\f$ and so on untill you get to
-the 100th block of data where t1 is fixed at \f$+pi\f$.
+data the same is done but t1 is fixed at \f$-pi + \frac{4pi}{100}\f$ and so on until you get to
+the one hundredth block of data where t1 is fixed at \f$+pi\f$.
 
 Please note the order that the order of arguments in the plumed.dat file must be the same as
 the order of arguments in the header of the grid file.
@@ -97,7 +96,7 @@ the order of arguments in the header of the grid file.
 class External : public Bias {
 
 private:
-  std::unique_ptr<Grid> BiasGrid_;
+  std::unique_ptr<GridBase> BiasGrid_;
   double scale_;
 
 public:
@@ -114,7 +113,7 @@ void External::registerKeywords(Keywords& keys) {
   keys.add("compulsory","FILE","the name of the file containing the external potential.");
   keys.addFlag("NOSPLINE",false,"specifies that no spline interpolation is to be used when calculating the energy and forces due to the external potential");
   keys.addFlag("SPARSE",false,"specifies that the external potential uses a sparse grid");
-  keys.add("compulsory","SCALE","1.0","a factor that multiplies the external potential, usefull to invert free energies");
+  keys.add("compulsory","SCALE","1.0","a factor that multiplies the external potential, useful to invert free energies");
 }
 
 External::External(const ActionOptions& ao):
@@ -140,7 +139,7 @@ External::External(const ActionOptions& ao):
 // read grid
   IFile gridfile; gridfile.open(filename);
   std::string funcl=getLabel() + ".bias";
-  BiasGrid_=Grid::create(funcl,getArguments(),gridfile,sparsegrid,spline,true);
+  BiasGrid_=GridBase::create(funcl,getArguments(),gridfile,sparsegrid,spline,true);
   if(BiasGrid_->getDimension()!=getNumberOfArguments()) error("mismatch between dimensionality of input grid and number of arguments");
   for(unsigned i=0; i<getNumberOfArguments(); ++i) {
     if( getPntrToArgument(i)->isPeriodic()!=BiasGrid_->getIsPeriodic()[i] ) error("periodicity mismatch between arguments and input bias");

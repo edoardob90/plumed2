@@ -29,23 +29,6 @@
 namespace PLMD {
 namespace ves {
 
-static std::map<std::string, double> leptonConstants= {
-  {"e", std::exp(1.0)},
-  {"log2e", 1.0/std::log(2.0)},
-  {"log10e", 1.0/std::log(10.0)},
-  {"ln2", std::log(2.0)},
-  {"ln10", std::log(10.0)},
-  {"pi", pi},
-  {"pi_2", pi*0.5},
-  {"pi_4", pi*0.25},
-//  {"1_pi", 1.0/pi},
-//  {"2_pi", 2.0/pi},
-//  {"2_sqrtpi", 2.0/std::sqrt(pi)},
-  {"sqrt2", std::sqrt(2.0)},
-  {"sqrt1_2", std::sqrt(0.5)}
-};
-
-
 //+PLUMEDOC VES_BASISF BF_CUSTOM
 /*
 Basis functions given by arbitrary mathematical expressions.
@@ -123,8 +106,12 @@ class BF_Custom : public BasisFunctions {
 private:
   lepton::CompiledExpression transf_value_expression_;
   lepton::CompiledExpression transf_deriv_expression_;
+  double* transf_value_lepton_ref_;
+  double* transf_deriv_lepton_ref_;
   std::vector<lepton::CompiledExpression> bf_values_expressions_;
   std::vector<lepton::CompiledExpression> bf_derivs_expressions_;
+  std::vector<double*> bf_values_lepton_ref_;
+  std::vector<double*> bf_derivs_lepton_ref_;
   std::string variable_str_;
   std::string transf_variable_str_;
   bool do_transf_;
@@ -151,8 +138,12 @@ void BF_Custom::registerKeywords(Keywords& keys) {
 
 BF_Custom::BF_Custom(const ActionOptions&ao):
   PLUMED_VES_BASISFUNCTIONS_INIT(ao),
+  transf_value_lepton_ref_(nullptr),
+  transf_deriv_lepton_ref_(nullptr),
   bf_values_expressions_(0),
   bf_derivs_expressions_(0),
+  bf_values_lepton_ref_(0,nullptr),
+  bf_derivs_lepton_ref_(0,nullptr),
   variable_str_("x"),
   transf_variable_str_("t"),
   do_transf_(false),
@@ -189,11 +180,13 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
   //
   bf_values_expressions_.resize(getNumberOfBasisFunctions());
   bf_derivs_expressions_.resize(getNumberOfBasisFunctions());
+  bf_values_lepton_ref_.resize(getNumberOfBasisFunctions());
+  bf_derivs_lepton_ref_.resize(getNumberOfBasisFunctions());
   //
   for(unsigned int i=1; i<getNumberOfBasisFunctions(); i++) {
     std::string is; Tools::convert(i,is);
     try {
-      lepton::ParsedExpression pe_value = lepton::Parser::parse(bf_str[i]).optimize(leptonConstants);
+      lepton::ParsedExpression pe_value = lepton::Parser::parse(bf_str[i]).optimize(lepton::Constants());
       std::ostringstream tmp_stream; tmp_stream << pe_value;
       bf_values_parsed[i] = tmp_stream.str();
       bf_values_expressions_[i] = pe_value.createCompiledExpression();
@@ -214,7 +207,7 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
     }
 
     try {
-      lepton::ParsedExpression pe_deriv = lepton::Parser::parse(bf_str[i]).differentiate(variable_str_).optimize(leptonConstants);
+      lepton::ParsedExpression pe_deriv = lepton::Parser::parse(bf_str[i]).differentiate(variable_str_).optimize(lepton::Constants());
       std::ostringstream tmp_stream2; tmp_stream2 << pe_deriv;
       bf_derivs_parsed[i] = tmp_stream2.str();
       bf_derivs_expressions_[i] = pe_deriv.createCompiledExpression();
@@ -222,6 +215,14 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
     catch(PLMD::lepton::Exception& exc) {
       plumed_merror("There was some problem in parsing the derivative of the function "+bf_str[i]+" given in FUNC"+is + " with lepton");
     }
+
+    try {
+      bf_values_lepton_ref_[i] = &bf_values_expressions_[i].getVariableReference(variable_str_);
+    } catch(PLMD::lepton::Exception& exc) {}
+
+    try {
+      bf_derivs_lepton_ref_[i] = &bf_derivs_expressions_[i].getVariableReference(variable_str_);
+    } catch(PLMD::lepton::Exception& exc) {}
 
   }
 
@@ -242,7 +243,7 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
     }
 
     try {
-      lepton::ParsedExpression pe_value = lepton::Parser::parse(transf_str).optimize(leptonConstants);;
+      lepton::ParsedExpression pe_value = lepton::Parser::parse(transf_str).optimize(lepton::Constants());;
       std::ostringstream tmp_stream; tmp_stream << pe_value;
       transf_value_parsed = tmp_stream.str();
       transf_value_expression_ = pe_value.createCompiledExpression();
@@ -263,7 +264,7 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
     }
 
     try {
-      lepton::ParsedExpression pe_deriv = lepton::Parser::parse(transf_str).differentiate(transf_variable_str_).optimize(leptonConstants);;
+      lepton::ParsedExpression pe_deriv = lepton::Parser::parse(transf_str).differentiate(transf_variable_str_).optimize(lepton::Constants());;
       std::ostringstream tmp_stream2; tmp_stream2 << pe_deriv;
       transf_deriv_parsed = tmp_stream2.str();
       transf_deriv_expression_ = pe_deriv.createCompiledExpression();
@@ -271,6 +272,15 @@ BF_Custom::BF_Custom(const ActionOptions&ao):
     catch(PLMD::lepton::Exception& exc) {
       plumed_merror("There was some problem in parsing the derivative of the function "+transf_str+" given in TRANSFORM with lepton");
     }
+
+    try {
+      transf_value_lepton_ref_ = &transf_value_expression_.getVariableReference(transf_variable_str_);
+    } catch(PLMD::lepton::Exception& exc) {}
+
+    try {
+      transf_deriv_lepton_ref_ = &transf_deriv_expression_.getVariableReference(transf_variable_str_);
+    } catch(PLMD::lepton::Exception& exc) {}
+
   }
   //
   log.printf("  Using the following functions [lepton parsed function and derivative]:\n");
@@ -307,19 +317,12 @@ void BF_Custom::getAllValues(const double arg, double& argT, bool& inside_range,
   double transf_derivf=1.0;
   //
   if(do_transf_) {
-    // has to copy as the function is const
-    lepton::CompiledExpression ce_value = transf_value_expression_;
-    try {
-      ce_value.getVariableReference(transf_variable_str_) = argT;
-    } catch(PLMD::lepton::Exception& exc) {}
 
-    lepton::CompiledExpression ce_deriv = transf_deriv_expression_;
-    try {
-      ce_deriv.getVariableReference(transf_variable_str_) = argT;
-    } catch(PLMD::lepton::Exception& exc) {}
+    if(transf_value_lepton_ref_) {*transf_value_lepton_ref_ = argT;}
+    if(transf_deriv_lepton_ref_) {*transf_deriv_lepton_ref_ = argT;}
 
-    argT = ce_value.evaluate();
-    transf_derivf = ce_deriv.evaluate();
+    argT = transf_value_expression_.evaluate();
+    transf_derivf = transf_deriv_expression_.evaluate();
 
     if(check_nan_inf_ && (std::isnan(argT) || std::isinf(argT)) ) {
       std::string vs; Tools::convert(argT,vs);
@@ -335,17 +338,13 @@ void BF_Custom::getAllValues(const double arg, double& argT, bool& inside_range,
   values[0]=1.0;
   derivs[0]=0.0;
   for(unsigned int i=1; i < getNumberOfBasisFunctions(); i++) {
-    lepton::CompiledExpression ce_value = bf_values_expressions_[i];
-    try {
-      ce_value.getVariableReference(variable_str_) = argT;
-    } catch(PLMD::lepton::Exception& exc) {}
-    values[i] = ce_value.evaluate();
 
-    lepton::CompiledExpression ce_deriv = bf_derivs_expressions_[i];
-    try {
-      ce_deriv.getVariableReference(variable_str_) = argT;
-    } catch(PLMD::lepton::Exception& exc) {}
-    derivs[i] = ce_deriv.evaluate();
+    if(bf_values_lepton_ref_[i]) {*bf_values_lepton_ref_[i] = argT;}
+    if(bf_derivs_lepton_ref_[i]) {*bf_derivs_lepton_ref_[i] = argT;}
+
+    values[i] = bf_values_expressions_[i].evaluate();
+    derivs[i] = bf_derivs_expressions_[i].evaluate();
+
     if(do_transf_) {derivs[i]*=transf_derivf;}
     // NaN checks
     if(check_nan_inf_ && (std::isnan(values[i]) || std::isinf(values[i])) ) {

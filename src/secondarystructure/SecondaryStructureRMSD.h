@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2013-2018 The plumed team
+   Copyright (c) 2013-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -41,6 +41,8 @@ class SecondaryStructureRMSD :
   public vesselbase::ActionWithVessel
 {
 private:
+/// Are we operating without periodic boundary conditions
+  bool nopbc;
 /// The type of rmsd we are calculating
   std::string alignType;
 /// List of all the atoms we require

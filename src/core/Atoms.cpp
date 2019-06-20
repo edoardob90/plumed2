@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -213,8 +213,8 @@ void Atoms::share(const std::set<AtomNumber>& unique) {
   int ndata=3;
   if(!massAndChargeOK) {
     ndata=5;
-    masses.assign(masses.size(),NAN);
-    charges.assign(charges.size(),NAN);
+    masses.assign(masses.size(),std::numeric_limits<double>::quiet_NaN());
+    charges.assign(charges.size(),std::numeric_limits<double>::quiet_NaN());
     mdatoms->getCharges(gatindex,charges);
     mdatoms->getMasses(gatindex,masses);
   }
@@ -550,12 +550,12 @@ void Atoms::readBinary(std::istream&i) {
 }
 
 double Atoms::getKBoltzmann()const {
-  if(naturalUnits) return 1.0;
+  if(naturalUnits || MDnaturalUnits) return 1.0;
   else return kBoltzmann/units.getEnergy();
 }
 
 double Atoms::getMDKBoltzmann()const {
-  if(naturalUnits) return 1.0;
+  if(naturalUnits || MDnaturalUnits) return 1.0;
   else return kBoltzmann/MDUnits.getEnergy();
 }
 
@@ -579,6 +579,22 @@ void Atoms::getLocalMDForces(std::vector<Vector>& localForces) {
   for(unsigned i=0; i<gatindex.size(); i++) {
     localForces[i] = mdatoms->getMDforces(i);
   }
+}
+
+void Atoms::setExtraCV(const std::string &name,void*p) {
+  mdatoms->setExtraCV(name,p);
+}
+
+void Atoms::setExtraCVForce(const std::string &name,void*p) {
+  mdatoms->setExtraCVForce(name,p);
+}
+
+double Atoms::getExtraCV(const std::string &name) {
+  return mdatoms->getExtraCV(name);
+}
+
+void Atoms::updateExtraCVForce(const std::string &name,double f) {
+  mdatoms->updateExtraCVForce(name,f);
 }
 
 }

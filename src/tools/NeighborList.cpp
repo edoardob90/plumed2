@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -155,6 +155,12 @@ unsigned NeighborList::size() const {
 
 pair<unsigned,unsigned> NeighborList::getClosePair(unsigned i) const {
   return neighbors_[i];
+}
+
+pair<AtomNumber,AtomNumber> NeighborList::getClosePairAtomNumber(unsigned i) const {
+  pair<AtomNumber,AtomNumber> Aneigh;
+  Aneigh=pair<AtomNumber,AtomNumber>(fullatomlist_[neighbors_[i].first],fullatomlist_[neighbors_[i].second]);
+  return Aneigh;
 }
 
 vector<unsigned> NeighborList::getNeighbors(unsigned index) {

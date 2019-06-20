@@ -42,7 +42,7 @@ namespace ves {
 Output basis functions to file.
 
 This action can be used to write out to a grid file the values and derivatives of
-given basis functions. This is normally used for debugging when programing new
+given basis functions. This is normally used for debugging when programming new
 types of basis functions. For example, it is possible to calculate the
 derivatives numerically and compare to the analytically calculated
 derivatives.
@@ -70,10 +70,10 @@ VES_OUTPUT_BASISFUNCTIONS ...
 \endplumedfile
 
 This input should be run through the driver by using a command similar to the
-following one where the trajectory/configuration file conf.gro is needed to
+following one where the trajectory/configuration file configuration.gro is needed to
 trick the code to exit correctly.
 \verbatim
-plumed driver --plumed plumed.dat --igro conf.gro
+plumed driver --plumed plumed.dat --igro configuration.gro
 \endverbatim
 
 */
@@ -109,7 +109,7 @@ void OutputBasisFunctions::registerKeywords(Keywords& keys) {
   keys.add("optional","FILE_TARGETDIST","filename of the files on which the target distributions are written. By default it is BF_LABEL.targetdist-#.data.");
   keys.add("numbered","TARGET_DISTRIBUTION","the target distribution to be used.");
   keys.addFlag("IGNORE_PERIODICITY",false,"if the periodicity of the basis functions should be ignored.");
-  keys.addFlag("NUMERICAL_DERIVATIES",false,"if the derivatives of the basis functions should be calculated numerically.");
+  keys.addFlag("NUMERICAL_DERIVATIVES",false,"if the derivatives of the basis functions should be calculated numerically.");
 }
 
 OutputBasisFunctions::OutputBasisFunctions(const ActionOptions&ao):
@@ -150,7 +150,7 @@ OutputBasisFunctions::OutputBasisFunctions(const ActionOptions&ao):
   parseFlag("IGNORE_PERIODICITY",ignore_periodicity);
 
   bool numerical_deriv = false;
-  parseFlag("NUMERICAL_DERIVATIES",numerical_deriv);
+  parseFlag("NUMERICAL_DERIVATIVES",numerical_deriv);
 
   std::vector<TargetDistribution*> targetdist_pntrs;
   targetdist_pntrs.push_back(NULL);

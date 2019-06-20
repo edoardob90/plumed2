@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012-2018 The plumed team
+   Copyright (c) 2012-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -164,6 +164,10 @@ OFile& OFile::fmtField() {
 }
 
 OFile& OFile::printField(const std::string&name,double v) {
+// When one tries to print -nan we print nan instead.
+// The distinction between +nan and -nan is not well defined
+// Always printing nan simplifies some regtest (special functions computed our of range).
+  if(std::isnan(v)) v=std::numeric_limits<double>::quiet_NaN();
   sprintf(buffer_string.get(),fieldFmt.c_str(),v);
   printField(name,buffer_string.get());
   return *this;

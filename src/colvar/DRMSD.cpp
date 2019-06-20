@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012-2018 The plumed team
+   Copyright (c) 2012-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -146,9 +146,9 @@ DRMSD::DRMSD(const ActionOptions&ao):
 
   // store target_ distance
   std::string type; parse("TYPE",type);
-  drmsd_.reset( metricRegister().create<PLMD::DRMSD>( type ) );
+  drmsd_=metricRegister().create<PLMD::DRMSD>( type );
   drmsd_->setBoundsOnDistances( !nopbc, lcutoff, ucutoff );
-  drmsd_->set( pdb );
+  drmsd_->read( pdb );
   checkRead();
 
   std::vector<AtomNumber> atoms;

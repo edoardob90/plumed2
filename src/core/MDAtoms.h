@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -108,6 +108,16 @@ public:
 /// Rescale all the forces, including the virial.
 /// It is applied to all atoms with local index going from 0 to index.size()-1
   virtual void rescaleForces(const std::vector<int>&index,double factor)=0;
+
+/// Set a pointer to an extra CV.
+  virtual void setExtraCV(const std::string &name,void*p)=0;
+/// Set a pointer to an extra CV force.
+  virtual void setExtraCVForce(const std::string &name,void*p)=0;
+/// Retrieve the value of an extra CV.
+  virtual double getExtraCV(const std::string &name)=0;
+/// Update the value of an extra CV force.
+/// \todo check if this should also be scaled when acting on total energy
+  virtual void updateExtraCVForce(const std::string &name,double f)=0;
 };
 
 }

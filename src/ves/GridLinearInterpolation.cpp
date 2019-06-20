@@ -31,7 +31,7 @@ namespace PLMD {
 namespace ves {
 
 
-double GridLinearInterpolation::getGridValueWithLinearInterpolation_1D(Grid* grid_pntr, const std::vector<double>& arg) {
+double GridLinearInterpolation::getGridValueWithLinearInterpolation_1D(GridBase* grid_pntr, const std::vector<double>& arg) {
 
   plumed_massert(grid_pntr->getDimension()==1,"The grid is of the wrong dimension, should be one-dimensional");
   plumed_massert(arg.size()==1,"input value is of the wrong size");
@@ -51,7 +51,7 @@ double GridLinearInterpolation::getGridValueWithLinearInterpolation_1D(Grid* gri
 }
 
 
-double GridLinearInterpolation::getGridValueWithLinearInterpolation_2D(Grid* grid_pntr, const std::vector<double>& arg) {
+double GridLinearInterpolation::getGridValueWithLinearInterpolation_2D(GridBase* grid_pntr, const std::vector<double>& arg) {
   plumed_massert(grid_pntr->getDimension()==2,"The grid is of the wrong dimension, should be two-dimensional");
   plumed_massert(arg.size()==2,"input value is of the wrong size");
 
@@ -68,8 +68,8 @@ double GridLinearInterpolation::getGridValueWithLinearInterpolation_2D(Grid* gri
   i00[0] = i01[0] = unsigned( std::floor( (arg[0]-grid_min[0])/grid_delta[0] ) );
   i10[0] = i11[0] = unsigned( std::ceil(  (arg[0]-grid_min[0])/grid_delta[0] ) );
 
-  i00[1] = i10[1] = unsigned( std::floor( (arg[1]-grid_min[1])/grid_delta[0] ) );
-  i01[1] = i11[1] = unsigned( std::ceil(  (arg[1]-grid_min[1])/grid_delta[0] ) );
+  i00[1] = i10[1] = unsigned( std::floor( (arg[1]-grid_min[1])/grid_delta[1] ) );
+  i01[1] = i11[1] = unsigned( std::ceil(  (arg[1]-grid_min[1])/grid_delta[1] ) );
 
   // https://en.wikipedia.org/wiki/Bilinear_interpolation
   double x = arg[0];
@@ -95,7 +95,7 @@ double GridLinearInterpolation::getGridValueWithLinearInterpolation_2D(Grid* gri
 }
 
 
-double GridLinearInterpolation::getGridValueWithLinearInterpolation(Grid* grid_pntr, const std::vector<double>& arg) {
+double GridLinearInterpolation::getGridValueWithLinearInterpolation(GridBase* grid_pntr, const std::vector<double>& arg) {
   unsigned int dim = grid_pntr->getDimension();
   if(dim==1) {
     return getGridValueWithLinearInterpolation_1D(grid_pntr,arg);

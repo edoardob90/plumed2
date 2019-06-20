@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -172,6 +172,16 @@ public:
 /// See the non const version.
   template <typename T>
   static std::vector<const T*> unique2raw(const std::vector<std::unique_ptr<const T>>&);
+/// Tiny class that changes directory and comes back when going out of scope.
+/// In case system calls to change dir are not available it throws an exception.
+/// \warning By construction, changing directory breaks thread safety! Use with care.
+  class DirectoryChanger {
+    static const size_t buffersize=4096;
+    char cwd[buffersize]= {0};
+  public:
+    explicit DirectoryChanger(const char*path);
+    ~DirectoryChanger();
+  };
 };
 
 template <class T>

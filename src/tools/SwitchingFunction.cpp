@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012-2018 The plumed team
+   Copyright (c) 2012-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -26,24 +26,10 @@
 #include <vector>
 #include <limits>
 
+#define PI 3.14159265358979323846
+
 using namespace std;
 namespace PLMD {
-
-static std::map<string, double> leptonConstants= {
-  {"e", std::exp(1.0)},
-  {"log2e", 1.0/std::log(2.0)},
-  {"log10e", 1.0/std::log(10.0)},
-  {"ln2", std::log(2.0)},
-  {"ln10", std::log(10.0)},
-  {"pi", pi},
-  {"pi_2", pi*0.5},
-  {"pi_4", pi*0.25},
-//  {"1_pi", 1.0/pi},
-//  {"2_pi", 2.0/pi},
-//  {"2_sqrtpi", 2.0/std::sqrt(pi)},
-  {"sqrt2", std::sqrt(2.0)},
-  {"sqrt1_2", std::sqrt(0.5)}
-};
 
 //+PLUMEDOC INTERNAL switchingfunction
 /*
@@ -124,6 +110,16 @@ s(r) = 1 - \tanh\left( \frac{ r - d_0 }{ r_0 } \right)
 {TANH R_0=\f$r_0\f$ D_0=\f$d_0\f$}
 </td> <td> </td>
 </tr> <tr>
+<td> COSINUS </td> <td>
+\f$
+s(r) &= 1  & if r<=d0
+s(r) &= 0.5 \left( \cos ( \frac{ r - d_0 }{ r_0 } * PI ) + 1 \right) & if d0<r<=d0+r0
+s(r) &= 0  & if r> d0+r0
+\f$
+</td> <td>
+{COSINUS R_0=\f$r_0\f$ D_0=\f$d_0\f$}
+</td> <td> </td>
+</tr> <tr>
 <td> CUSTOM </td> <td>
 \f$
 s(r) = FUNC
@@ -135,7 +131,7 @@ s(r) = FUNC
 </table>
 
 Notice that for backward compatibility we allow using `MATHEVAL` instead of `CUSTOM`.
-Also notice that if the a `CUSTOM` switching function only depents on even powers of `x` it can be
+Also notice that if the a `CUSTOM` switching function only depends on even powers of `x` it can be
 made faster by using `x2` as a variable. For instance
 \verbatim
 {CUSTOM FUNC=1/(1+x2^3) R_0=0.3}
@@ -188,7 +184,10 @@ void SwitchingFunction::registerKeywords( Keywords& keys ) {
 
 void SwitchingFunction::set(const std::string & definition,std::string& errormsg) {
   vector<string> data=Tools::getWords(definition);
-  if( data.size()<1 ) errormsg="missing all input for switching function";
+  if( data.size()<1 ) {
+    errormsg="missing all input for switching function";
+    return;
+  }
   string name=data[0];
   data.erase(data.begin());
   invr0=0.0;
@@ -259,11 +258,12 @@ void SwitchingFunction::set(const std::string & definition,std::string& errormsg
   else if(name=="GAUSSIAN") type=gaussian;
   else if(name=="CUBIC") type=cubic;
   else if(name=="TANH") type=tanh;
+  else if(name=="COSINUS") type=cosinus;
   else if((name=="MATHEVAL" || name=="CUSTOM")) {
     type=leptontype;
     std::string func;
     Tools::parse(data,"FUNC",func);
-    lepton::ParsedExpression pe=lepton::Parser::parse(func).optimize(leptonConstants);
+    lepton::ParsedExpression pe=lepton::Parser::parse(func).optimize(lepton::Constants());
     lepton_func=func;
     expression.resize(OpenMP::getNumThreads());
     for(auto & e : expression) e=pe.createCompiledExpression();
@@ -271,11 +271,11 @@ void SwitchingFunction::set(const std::string & definition,std::string& errormsg
     for(unsigned t=0; t<lepton_ref.size(); t++) {
       try {
         lepton_ref[t]=&const_cast<lepton::CompiledExpression*>(&expression[t])->getVariableReference("x");
-      } catch(PLMD::lepton::Exception& exc) {
+      } catch(const PLMD::lepton::Exception& exc) {
         try {
           lepton_ref[t]=&const_cast<lepton::CompiledExpression*>(&expression[t])->getVariableReference("x2");
           leptonx2=true;
-        } catch(PLMD::lepton::Exception& exc) {
+        } catch(const PLMD::lepton::Exception& exc) {
 // this is necessary since in some cases lepton things a variable is not present even though it is present
 // e.g. func=0*x
           lepton_ref[t]=nullptr;
@@ -284,14 +284,14 @@ void SwitchingFunction::set(const std::string & definition,std::string& errormsg
     }
     std::string arg="x";
     if(leptonx2) arg="x2";
-    lepton::ParsedExpression ped=lepton::Parser::parse(func).differentiate(arg).optimize(leptonConstants);
+    lepton::ParsedExpression ped=lepton::Parser::parse(func).differentiate(arg).optimize(lepton::Constants());
     expression_deriv.resize(OpenMP::getNumThreads());
     for(auto & e : expression_deriv) e=ped.createCompiledExpression();
     lepton_ref_deriv.resize(expression_deriv.size());
     for(unsigned t=0; t<lepton_ref_deriv.size(); t++) {
       try {
         lepton_ref_deriv[t]=&const_cast<lepton::CompiledExpression*>(&expression_deriv[t])->getVariableReference(arg);
-      } catch(PLMD::lepton::Exception& exc) {
+      } catch(const PLMD::lepton::Exception& exc) {
 // this is necessary since in some cases lepton things a variable is not present even though it is present
 // e.g. func=3*x
         lepton_ref_deriv[t]=nullptr;
@@ -333,12 +333,14 @@ std::string SwitchingFunction::description() const {
     ostr<<"cubic";
   } else if(type==tanh) {
     ostr<<"tanh";
+  } else if(type==cosinus) {
+    ostr<<"cosinus";
   } else if(type==leptontype) {
     ostr<<"lepton";
   } else {
     plumed_merror("Unknown switching function type");
   }
-  ostr<<" swiching function with parameters d0="<<d0;
+  ostr<<" switching function with parameters d0="<<d0;
   if(type==rational) {
     ostr<<" nn="<<nn<<" mm="<<mm;
   } else if(type==nativeq) {
@@ -436,7 +438,7 @@ double SwitchingFunction::calculate(double distance,double&dfunc)const {
     dfunc=0.0;
   } else {
     if(type==smap) {
-      double sx=c*pow( rdist, a );
+      double sx=c*Tools::fastpow( rdist, a );
       result=pow( 1.0 + sx, d );
       dfunc=-b*sx/rdist*result/(1.0+sx);
     } else if(type==rational) {
@@ -461,6 +463,21 @@ double SwitchingFunction::calculate(double distance,double&dfunc)const {
       double tmp1=std::tanh(rdist);
       result = 1.0 - tmp1;
       dfunc=-(1-tmp1*tmp1);
+    } else if(type==cosinus) {
+      if(rdist<=0.0) {
+// rdist = (r-r1)/(r2-r1) ; rdist<=0.0 if r <=r1
+        result=1.;
+        dfunc=0.0;
+      } else if(rdist<=1.0) {
+// rdist = (r-r1)/(r2-r1) ; 0.0<=rdist<=1.0 if r1 <= r <=r2; (r2-r1)/(r2-r1)=1
+        double tmpcos = cos ( rdist * PI );
+        double tmpsin = sin ( rdist * PI );
+        result = 0.5 * (tmpcos + 1.0);
+        dfunc=-0.5 * PI * tmpsin * invr0;
+      } else {
+        result=0.;
+        dfunc=0.0;
+      }
     } else if(type==leptontype) {
       const unsigned t=OpenMP::getThreadNum();
       plumed_assert(t<expression.size());
@@ -518,7 +535,6 @@ double SwitchingFunction::get_dmax() const {
 double SwitchingFunction::get_dmax2() const {
   return dmax_2;
 }
-
 
 }
 

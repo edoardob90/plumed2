@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -40,26 +40,85 @@
 #include "tools/OpenMP.h"
 #include "tools/Tools.h"
 #include "tools/Stopwatch.h"
+#include "lepton/Exception.h"
 #include "DataFetchingObject.h"
 #include <cstdlib>
 #include <cstring>
 #include <set>
 #include <unordered_map>
+#include <exception>
+#include <stdexcept>
+#include <ios>
+#include <new>
+#include <typeinfo>
+#ifdef __PLUMED_LIBCXX11
+#include <system_error>
+#include <future>
+#include <memory>
+#include <functional>
+#endif
+
 
 using namespace std;
 
-#include "PlumedMainEnum.inc"
-
 namespace PLMD {
 
-const std::unordered_map<std::string, int> & plumedMainWordMap() {
-  static std::unordered_map<std::string, int> word_map;
-  static bool init=false;
-  if(!init) {
-#include "PlumedMainMap.inc"
+/// Small utility just used in this file to throw arbitrary exceptions
+static void testThrow(const char* what) {
+  auto words=Tools::getWords(what);
+  plumed_assert(words.size()>0);
+#define __PLUMED_THROW_NOMSG(type) if(words[0]==#type) throw type()
+#define __PLUMED_THROW_MSG(type) if(words[0]==#type) throw type(what)
+  __PLUMED_THROW_MSG(PLMD::ExceptionError);
+  __PLUMED_THROW_MSG(PLMD::ExceptionDebug);
+  __PLUMED_THROW_MSG(PLMD::Exception);
+  __PLUMED_THROW_MSG(PLMD::lepton::Exception);
+  __PLUMED_THROW_NOMSG(std::bad_exception);
+#ifdef __PLUMED_LIBCXX11
+  __PLUMED_THROW_NOMSG(std::bad_array_new_length);
+#endif
+  __PLUMED_THROW_NOMSG(std::bad_alloc);
+#ifdef __PLUMED_LIBCXX11
+  __PLUMED_THROW_NOMSG(std::bad_function_call);
+  __PLUMED_THROW_NOMSG(std::bad_weak_ptr);
+#endif
+  __PLUMED_THROW_NOMSG(std::bad_cast);
+  __PLUMED_THROW_NOMSG(std::bad_typeid);
+  __PLUMED_THROW_MSG(std::underflow_error);
+  __PLUMED_THROW_MSG(std::overflow_error);
+  __PLUMED_THROW_MSG(std::range_error);
+  __PLUMED_THROW_MSG(std::runtime_error);
+  __PLUMED_THROW_MSG(std::out_of_range);
+  __PLUMED_THROW_MSG(std::length_error);
+  __PLUMED_THROW_MSG(std::domain_error);
+  __PLUMED_THROW_MSG(std::invalid_argument);
+  __PLUMED_THROW_MSG(std::logic_error);
+
+#ifdef __PLUMED_LIBCXX11
+  if(words[0]=="std::system_error") {
+    plumed_assert(words.size()>2);
+    int error_code;
+    Tools::convert(words[2],error_code);
+    if(words[1]=="std::generic_category") throw std::system_error(error_code,std::generic_category(),what);
+    if(words[1]=="std::system_category") throw std::system_error(error_code,std::system_category(),what);
+    if(words[1]=="std::iostream_category") throw std::system_error(error_code,std::iostream_category(),what);
+    if(words[1]=="std::future_category") throw std::system_error(error_code,std::future_category(),what);
   }
-  init=true;
-  return word_map;
+#endif
+
+  if(words[0]=="std::ios_base::failure") {
+#ifdef __PLUMED_LIBCXX11
+    int error_code=0;
+    if(words.size()>2) Tools::convert(words[2],error_code);
+    if(words.size()>1 && words[1]=="std::generic_category") throw std::ios_base::failure(what,std::error_code(error_code,std::generic_category()));
+    if(words.size()>1 && words[1]=="std::system_category") throw std::ios_base::failure(what,std::error_code(error_code,std::system_category()));
+    if(words.size()>1 && words[1]=="std::iostream_category") throw std::ios_base::failure(what,std::error_code(error_code,std::iostream_category()));
+    if(words.size()>1 && words[1]=="std::future_category") throw std::ios_base::failure(what,std::error_code(error_code,std::future_category()));
+#endif
+    throw std::ios_base::failure(what);
+  }
+
+  plumed_error() << "unknown exception " << what;
 }
 
 PlumedMain::PlumedMain():
@@ -100,6 +159,16 @@ PlumedMain::~PlumedMain() {
 
 void PlumedMain::cmd(const std::string & word,void*val) {
 
+// Enumerate all possible commands:
+  enum {
+#include "PlumedMainEnum.inc"
+  };
+
+// Static object (initialized once) containing the map of commands:
+  const static std::unordered_map<std::string, int> word_map = {
+#include "PlumedMainMap.inc"
+  };
+
   try {
 
     auto ss=stopwatch.startPause();
@@ -111,8 +180,8 @@ void PlumedMain::cmd(const std::string & word,void*val) {
     } else {
       int iword=-1;
       double d;
-      const auto it=plumedMainWordMap().find(words[0]);
-      if(it!=plumedMainWordMap().end()) iword=it->second;
+      const auto it=word_map.find(words[0]);
+      if(it!=word_map.end()) iword=it->second;
       switch(iword) {
       case cmd_setBox:
         CHECK_INIT(initialized,word);
@@ -260,6 +329,13 @@ void PlumedMain::cmd(const std::string & word,void*val) {
         if( nw==2 ) mydatafetcher->setData( words[1], "", val );
         else mydatafetcher->setData( words[1], words[2], val );
         break;
+      /* ADDED WITH API==6 */
+      case cmd_setErrorHandler:
+      {
+        if(val) error_handler=*static_cast<plumed_error_handler*>(val);
+        else error_handler.handler=NULL;
+      }
+      break;
       case cmd_read:
         CHECK_INIT(initialized,word);
         if(val)readInputFile(static_cast<char*>(val));
@@ -378,6 +454,16 @@ void PlumedMain::cmd(const std::string & word,void*val) {
         doCheckPoint = false;
         if(*static_cast<int*>(val)!=0) doCheckPoint = true;
         break;
+      /* ADDED WITH API==6 */
+      case cmd_setNumOMPthreads:
+        CHECK_NOTNULL(val,word);
+        OpenMP::setNumThreads(*static_cast<int*>(val)>0?*static_cast<int*>(val):1);
+        break;
+      /* ADDED WITH API==6 */
+      /* only used for testing */
+      case cmd_throw:
+        CHECK_NOTNULL(val,word);
+        testThrow((const char*) val);
       /* STOP API */
       case cmd_setMDEngine:
         CHECK_NOTINIT(initialized,word);
@@ -439,6 +525,16 @@ void PlumedMain::cmd(const std::string & word,void*val) {
         plumed_assert(nw==2);
         *(static_cast<int*>(val))=(actionRegister().check(words[1]) ? 1:0);
         break;
+      case cmd_setExtraCV:
+        CHECK_NOTNULL(val,word);
+        plumed_assert(nw==2);
+        atoms.setExtraCV(words[1],val);
+        break;
+      case cmd_setExtraCVForce:
+        CHECK_NOTNULL(val,word);
+        plumed_assert(nw==2);
+        atoms.setExtraCVForce(words[1],val);
+        break;
       case cmd_GREX:
         if(!grex) grex.reset(new GREX(*this));
         plumed_massert(grex,"error allocating grex");
@@ -463,7 +559,7 @@ void PlumedMain::cmd(const std::string & word,void*val) {
       }
     }
 
-  } catch (Exception &e) {
+  } catch (std::exception &e) {
     if(log.isOpen()) {
       log<<"\n\n################################################################################\n\n";
       log<<e.what();
@@ -554,7 +650,7 @@ void PlumedMain::readInputWords(const std::vector<std::string> & words) {
   } else {
     std::vector<std::string> interpreted(words);
     Tools::interpretLabel(interpreted);
-    std::unique_ptr<Action> action(actionRegister().create(ActionOptions(*this,interpreted)));
+    auto action=actionRegister().create(ActionOptions(*this,interpreted));
     if(!action) {
       std::string msg;
       msg ="ERROR\nI cannot understand line:";

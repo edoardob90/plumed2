@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2011-2018 The plumed team
+   Copyright (c) 2011-2019 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed.org for more information.
@@ -57,8 +57,8 @@ public:
 /// Base class for all the input Actions.
 /// The input Actions are more or less corresponding to the directives
 /// in the plumed.dat file and are applied in order at each time-step.
-class Action
-{
+class Action {
+  friend class ActionShortcut;
 
 /// Name of the directive in the plumed.dat file.
   const std::string name;
