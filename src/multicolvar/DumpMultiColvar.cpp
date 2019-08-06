@@ -120,7 +120,8 @@ DumpMultiColvar::DumpMultiColvar(const ActionOptions&ao):
   if(file.length()==0) error("name out output file was not specified");
   std::string type=Tools::extension(file);
   log<<"  file name "<<file<<"\n";
-  if(type!="xyz") error("can only print xyz file type with DUMPMULTICOLVAR");
+/* Allow for printing colvars in Extended XYZ file */
+  if(type !="xyz" && type != "extxyz") error("can only print XYZ or extended XYZ file type with DUMPMULTICOLVAR");
 
   fmt_xyz="%f";
 
