@@ -338,9 +338,10 @@ void Tools::stripLeadingAndTrailingBlanks( std::string& str ) {
 }
 
 std::string Tools::extension(const std::string&s) {
+  size_t ext_len = 6; /* allow extensions of max ext_len characters instead of only 3 */
   size_t n=s.find_last_of(".");
   std::string ext;
-  if(n!=std::string::npos && n+1<s.length() && n+5>=s.length()) {
+  if(n!=std::string::npos && n+1<s.length() && n+ext_len+2>=s.length()) {
     ext=s.substr(n+1);
     if(ext.find("/")!=std::string::npos) ext="";
     string base=s.substr(0,n);

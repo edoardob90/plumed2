@@ -71,7 +71,7 @@ class DumpMultiColvar:
   OFile of;
   double lenunit;
   MultiColvarBase* mycolv;
-  std::string fmt_xyz;
+  std::string fmt_xyz, box_string, file_type;
   std::vector<std::string> names;
   std::vector<unsigned>    residueNumbers;
   std::vector<std::string> residueNames;
@@ -118,10 +118,10 @@ DumpMultiColvar::DumpMultiColvar(const ActionOptions&ao):
 
   string file; parse("FILE",file);
   if(file.length()==0) error("name out output file was not specified");
-  std::string type=Tools::extension(file);
+  file_type=Tools::extension(file);
   log<<"  file name "<<file<<"\n";
 /* Allow for printing colvars in Extended XYZ file */
-  if(type !="xyz" && type != "extxyz") error("can only print XYZ or extended XYZ file type with DUMPMULTICOLVAR");
+  if(file_type!="xyz" && file_type!="extxyz") error("can only print XYZ or extended XYZ file type with DUMPMULTICOLVAR");
 
   fmt_xyz="%f";
 
@@ -161,12 +161,23 @@ void DumpMultiColvar::update() {
   of.printf("%u\n",mycolv->getCurrentNumberOfActiveTasks());
   const Tensor & t(mycolv->getPbc().getBox());
   if(mycolv->getPbc().isOrthorombic()) {
-    of.printf((" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+"\n").c_str(),lenunit*t(0,0),lenunit*t(1,1),lenunit*t(2,2));
+    if (file_type == "xyz") { 
+        box_string = " "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+"\n";
+        of.printf(box_string.c_str(),lenunit*t(0,0),lenunit*t(1,1),lenunit*t(2,2));
+    } else {
+        box_string = "Lattice=\""+fmt_xyz+" 0.0 0.0 0.0 "+fmt_xyz+" 0.0 0.0 0.0 "+fmt_xyz+"\" Properties=species:S:1:pos:R:3:%s:R:1\n";
+        of.printf(box_string.c_str(), lenunit*t(0,0),lenunit*t(1,1),lenunit*t(2,2),
+                                      mycolv->getLabel().c_str()
+                  );
+    }
   } else {
-    of.printf((" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+"\n").c_str(),
+    if (file_type == "xyz") box_string = " "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+"\n";
+    else box_string = "Lattice=\""+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+" "+fmt_xyz+"\" Properties=species:S:1:pos:R:3:%s:R:1\n";
+    of.printf(box_string.c_str(),
               lenunit*t(0,0),lenunit*t(0,1),lenunit*t(0,2),
               lenunit*t(1,0),lenunit*t(1,1),lenunit*t(1,2),
-              lenunit*t(2,0),lenunit*t(2,1),lenunit*t(2,2)
+              lenunit*t(2,0),lenunit*t(2,1),lenunit*t(2,2),
+              mycolv->getLabel().c_str()
              );
   }
   vesselbase::StoreDataVessel* stash=dynamic_cast<vesselbase::StoreDataVessel*>( getPntrToArgument() );
