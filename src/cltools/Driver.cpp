@@ -225,6 +225,7 @@ void Driver<real>::registerKeywords( Keywords& keys ) {
   keys.add("atoms","--ixyz","the trajectory in xyz format");
   keys.add("atoms","--igro","the trajectory in gro format");
   keys.add("atoms","--idlp4","the trajectory in DL_POLY_4 format");
+  keys.add("atoms","--idump","the trajectory as a LAMMPS dump file");
 #ifdef __PLUMED_HAS_XDRFILE
   keys.add("atoms","--ixtc","the trajectory in xtc format (xdrfile implementation)");
   keys.add("atoms","--itrr","the trajectory in trr format (xdrfile implementation)");
@@ -402,6 +403,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
     std::string traj_xyz; parse("--ixyz",traj_xyz);
     std::string traj_gro; parse("--igro",traj_gro);
     std::string traj_dlp4; parse("--idlp4",traj_dlp4);
+    std::string traj_dump; parse("--idump", traj_dump);
     std::string traj_xtc;
     std::string traj_trr;
 #ifdef __PLUMED_HAS_XDRFILE
@@ -427,6 +429,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
       if(traj_xyz.length()>0) nn++;
       if(traj_gro.length()>0) nn++;
       if(traj_dlp4.length()>0) nn++;
+      if(traj_dump.length()>0) nn++;
       if(traj_xtc.length()>0) nn++;
       if(traj_trr.length()>0) nn++;
       if(nn>1) {
@@ -446,6 +449,10 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
     if(traj_dlp4.length()>0 && trajectoryFile.length()==0) {
       trajectoryFile=traj_dlp4;
       trajectory_fmt="dlp4";
+    }
+    if(traj_dump.length() > 0 && trajectoryFile.length() == 0) {
+        trajectoryFile=traj_dump;
+        trajectory_fmt="dump";
     }
     if(traj_xtc.length()>0 && trajectoryFile.length()==0) {
       trajectoryFile=traj_xtc;
@@ -658,6 +665,30 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
           lstep = false;
         }
       }
+      if(use_molfile==false && trajectory_fmt="dump") {
+        /* LAMMPS dump per-frame header is as follows (additional details here: https://lammps.sandia.gov/doc/dump.html):
+           ITEM: TIMESTEP
+           nstep
+           ITEM: NUMBER OF ATOMS
+           natoms
+           if (orthogonal_box) {
+           ITEM: BOX BOUNDS xx yy zz --> every character can be: p=periodic, f=fixed, s=shrink wrap, m=shrink wrap with a minimum value
+           xlo xhi
+           ylo yhi
+           zlo zhi
+           } else if (triclinic_box) {
+           ITEM: BOX BOUNDS xy xz yz xx yy zz --> the "mixed" terms (xy, yz, xz) are the box tilt factors
+           xlo_bound xhi_bound xy
+           ylo_bound yhi_bound xz
+           ylo_bound yhi_bound xz
+           }
+           ITEM: ATOMS lists --> column descriptors for the per-atom lines that follow
+        */
+          if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading 'TIMESTEP' line");
+          else Tools::getline(fp,line);
+          if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading 'NUMBER OF ATOMS' line");
+          else { Tools::getline(fp,line); sscanf(line.c_str(),"%100d",&natoms); }
+      }
     }
     if(checknatoms<0 && !noatoms) {
       pd_nlocal=natoms;
@@ -847,13 +878,45 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
           }
           for(auto i=0; i<9; i++)cell[i]=real(celld[i])*0.1;
         }
+        /* Read box from LAMMPS dump file */
+        if(trajectory_fmt=="dump") {
+            std::vector<double> celld(9,0.0);
+            std::vector<std::string> words;
+            if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading BOX BOUNDS line");
+            else words=Tools::getWords(line);
+            if (words.size() > 6) {
+                /* TODO: triclinic box
+                for (int i=0; i<9; i+=4) {
+                    double blo, bhi, tilt;
+                    Tools::getline(fp,line);
+                    sscanf(line.c_str(), "%lf %lf %lf", &blo, &bhi, &tilt);
+                }
+                */
+                error("LAMMPS dump reader: triclinic box not yet implemented, sorry :-(");
+            } else if (words.size() == 6) {
+                // orthogonal box
+                for (int i=0; i<9; i+=4) {
+                    double blo, bhi;
+                    Tools::getline(fp,line);
+                    sscanf(line.c_str(), "%lf %lf", &blo, &bhi);
+                    cell[i]=real(bhi-blo);
+                }
+                // Read the last header line containing column descriptors for the per-atom lines that follow
+                if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading per-atom descriptors line");
+                else {
+                    words=Tools::getWords(line);
+                    if(words.size() > 6) fprintf(out,"LAMMPS dump reader: reading only 'ATOM_TYPE X Y Z', but dump contains other descriptors\n");
+                    else if(words.size() < 6) error("LAMMPS dump reader: per-atom fields missing (coordinates? atom type?)");
+                }
+            } else error("LAMMPS dump reader: unrecognized BOX BOUNDS specifications");
+        }
         int ddist=0;
         // Read coordinates
         for(int i=0; i<natoms; i++) {
           bool ok=Tools::getline(fp,line);
           if(!ok) error("premature end of trajectory file");
           double cc[3];
-          if(trajectory_fmt=="xyz") {
+          if(trajectory_fmt=="xyz" || trajectory_fmt=="dump") {
             char dummy[1000];
             int ret=std::sscanf(line.c_str(),"%999s %100lf %100lf %100lf",dummy,&cc[0],&cc[1],&cc[2]);
             if(ret!=4) error("cannot read line"+line);
