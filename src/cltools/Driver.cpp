@@ -453,6 +453,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
     if(traj_dump.length() > 0 && trajectoryFile.length() == 0) {
         trajectoryFile=traj_dump;
         trajectory_fmt="dump";
+        fprintf(out,"DRIVER: using LAMMPS dump reader for input file\n");
     }
     if(traj_xtc.length()>0 && trajectoryFile.length()==0) {
       trajectoryFile=traj_xtc;
@@ -665,7 +666,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
           lstep = false;
         }
       }
-      if(use_molfile==false && trajectory_fmt="dump") {
+      if(use_molfile==false && trajectory_fmt=="dump") {
         /* LAMMPS dump per-frame header is as follows (additional details here: https://lammps.sandia.gov/doc/dump.html):
            ITEM: TIMESTEP
            nstep
@@ -684,7 +685,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
            }
            ITEM: ATOMS lists --> column descriptors for the per-atom lines that follow
         */
-          if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading 'TIMESTEP' line");
+          if(!Tools::getline(fp,line)) break;
           else Tools::getline(fp,line);
           if(!Tools::getline(fp,line)) error("LAMMPS dump reader: error reading 'NUMBER OF ATOMS' line");
           else { Tools::getline(fp,line); sscanf(line.c_str(),"%100d",&natoms); }
