@@ -440,7 +440,10 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
     }
     if(traj_xyz.length()>0 && trajectoryFile.length()==0) {
       trajectoryFile=traj_xyz;
-      trajectory_fmt="xyz";
+      // check if the XYZ is of Extended type. This changes the way Plumed reads the box specifications
+      std::string file_type = Tools::extension(trajectoryFile);
+      if (file_type == "extxyz") trajectory_fmt="extxyz";
+      else trajectory_fmt="xyz";
     }
     if(traj_gro.length()>0 && trajectoryFile.length()==0) {
       trajectoryFile=traj_gro;
@@ -645,13 +648,13 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
           break;
         }
 #endif
-      } else if(trajectory_fmt=="xyz" || trajectory_fmt=="gro" || trajectory_fmt=="dlp4") {
+      } else if(trajectory_fmt=="xyz" || trajectory_fmt=="extxyz" || trajectory_fmt=="gro" || trajectory_fmt=="dlp4") {
         if(!Tools::getline(fp,line)) break;
       }
     }
     bool first_step=false;
     if(!noatoms&&!parseOnly) {
-      if(use_molfile==false && (trajectory_fmt=="xyz" || trajectory_fmt=="gro")) {
+      if(use_molfile==false && (trajectory_fmt=="xyz" || trajectory_fmt=="extxyz" || trajectory_fmt=="gro")) {
         if(trajectory_fmt=="gro") if(!Tools::getline(fp,line)) error("premature end of trajectory file");
         sscanf(line.c_str(),"%100d",&natoms);
       }
@@ -864,6 +867,20 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
             celld=pbc_cli_box;
           }
           for(unsigned i=0; i<9; i++)cell[i]=real(celld[i]);
+        } else if(trajectory_fmt == "extxyz") {
+            if(!Tools::getline(fp,line)) error("premature end of trajectory file");
+            std::vector<double> celld(9,0.0);
+            if(pbc_cli_given==false) {
+                /* Box specifications for an Extended XYZ are of the kind:
+                   Lattice=" xx xy xz yx yy yz zx zy zz " Properties=species:S:1:pos:R:3
+                 */
+                sscanf(line.c_str(), "%*s %100lf %100lf %100lf %100lf %100lf %100lf %100lf %100lf %100lf %*s",
+                       &celld[0], &celld[1], &celld[2],
+                       &celld[3], &celld[4], &celld[5],
+                       &celld[6], &celld[7], &celld[8]);
+            } else {
+                celld=pbc_cli_box;
+            }
         }
         if(trajectory_fmt=="dlp4") {
           std::vector<double> celld(9,0.0);
@@ -896,7 +913,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
                 error("LAMMPS dump reader: triclinic box not yet implemented, sorry :-(");
             } else if (words.size() == 6) {
                 // orthogonal box
-                for (int i=0; i<9; i+=4) {
+                for (size_t i=0; i<9; i+=4) {
                     double blo, bhi;
                     Tools::getline(fp,line);
                     sscanf(line.c_str(), "%lf %lf", &blo, &bhi);
@@ -917,7 +934,7 @@ int Driver<real>::main(FILE* in,FILE*out,Communicator& pc) {
           bool ok=Tools::getline(fp,line);
           if(!ok) error("premature end of trajectory file");
           double cc[3];
-          if(trajectory_fmt=="xyz" || trajectory_fmt=="dump") {
+          if(trajectory_fmt=="xyz" || trajectory_fmt=="extxyz" || trajectory_fmt=="dump") {
             char dummy[1000];
             int ret=std::sscanf(line.c_str(),"%999s %100lf %100lf %100lf",dummy,&cc[0],&cc[1],&cc[2]);
             if(ret!=4) error("cannot read line"+line);
